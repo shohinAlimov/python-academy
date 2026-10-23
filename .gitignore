@@ -1,0 +1,47 @@
+# Зависимости (библиотеки)
+node_modules/
+jspm_packages/
+
+# Переменные окружения и секреты (КРИТИЧЕСКИ ВАЖНО)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Логи
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+pnpm-debug.log*
+
+# Сборки и кэш
+dist/
+build/
+.cache/
+.next/
+.nuxt/
+.vuepress/dist
+
+# Операционная система и редакторы кода
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Файлы тестирования и покрытия кодом
+coverage/
+.nyc_output/
+
+# Ключи и сертификаты безопасности
+*.pem
+*.key
+*.cert
