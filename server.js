@@ -59,7 +59,7 @@ const setCookie = (res, id) =>
     {
       httpOnly: true,
       sameSite: "lax",
-      secure: NODE_ENV === production,
+      secure: NODE_ENV === "production",
       maxAge: 30 * 864e5,
     },
   );
