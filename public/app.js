@@ -208,18 +208,35 @@ async function people() {
 }
 
 const solutionsHtml = (map) => {
-  const list = TASKS.filter((t) => map[t.id]);
-  return list.length
-    ? list
+  const total = Object.keys(map).length;
+  if (!total) return `<p class="empty">Пока нет решений.</p>`;
+
+  return DATA.sections
+    .map((s) => {
+      const list = s.tasks.filter((t) => map[t.id]);
+      const pct = (100 * list.length) / s.tasks.length;
+
+      const head = `<span class="mt">${s.title}</span>
+        <span class="msg" style="margin-left:auto">${list.length}/${s.tasks.length}</span>
+        <div class="pw" style="width:60px"><div class="pf" style="width:${pct}%"></div></div>`;
+
+      // модуль без решений — просто серая строка, без раскрытия
+      if (!list.length)
+        return `<div class="mod empty-mod"><div class="msum">${head}</div></div>`;
+
+      const items = list
         .map(
-          (
-            t,
-          ) => `<details><summary><span class="num" style="width:24px;height:24px;font-size:12px">${t.id}</span>${t.title}
-    <span class="msg" style="margin-left:auto">${fmt(map[t.id].ts)}</span></summary>
-    <div class="in"><div class="desc">${t.desc}</div><pre>${esc(map[t.id].code)}</pre></div></details>`,
+          (t) => `<details class="sol">
+            <summary><span class="num" style="width:24px;height:24px;font-size:12px">${t.id}</span>${t.title}
+              <span class="msg" style="margin-left:auto">${fmt(map[t.id].ts)}</span></summary>
+            <div class="in"><div class="desc">${t.desc}</div><pre>${esc(map[t.id].code)}</pre></div>
+          </details>`,
         )
-        .join("")
-    : `<p class="empty">Пока нет решений.</p>`;
+        .join("");
+
+      return `<details class="mod"><summary class="msum">${head}</summary><div class="in">${items}</div></details>`;
+    })
+    .join("");
 };
 const emojiPicker = (cur) =>
   `<div class="emo" id="emo">${EMOJIS.map((e) => `<button type="button" data-em="${e}" class="${e === cur ? "on" : ""}">${e}</button>`).join("")}</div>`;
