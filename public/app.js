@@ -77,7 +77,7 @@ async function boot() {
   } catch {}
   if (!me) subs = lsGet();
   chrome();
-  ({ home, topic, people, profile, login })[document.body.dataset.page]();
+  await ({ home, topic, people, profile, login })[document.body.dataset.page]();
 }
 
 function chrome() {
@@ -91,9 +91,9 @@ function chrome() {
       ? ["profile.html", (me.emoji || "🐍") + " " + esc(me.name), "profile"]
       : ["login.html", "Войти / Регистрация", "login"],
   ];
-  $("#bar").innerHTML = `<a class="logo" href="index.html">🐍 Python Задачи</a>
+  $("#bar").innerHTML = `<a class="logo" href="index.html"><span class="brand-mark" aria-hidden="true">&gt;_</span><span>Python Academy</span></a>
     <nav>${L.map(([h, t, p]) => `<a href="${h}" class="${pg === p || (pg === "topic" && p === "home") ? "on" : ""}">${t}</a>`).join("")}${me ? `<a href="#" id="out">Выйти</a>` : ""}</nav>
-    <div class="prog"><span>${d}/${n}</span><div class="pw"><div class="pf" style="width:${(100 * d) / n}%"></div></div></div>`;
+    <div class="prog" aria-label="Решено ${d} из ${n} задач"><span>${d} / ${n}</span><div class="pw"><div class="pf" style="width:${(100 * d) / n}%"></div></div></div>`;
   const o = $("#out");
   if (o)
     o.onclick = async (e) => {
@@ -106,19 +106,44 @@ function chrome() {
 const notice = () =>
   me
     ? ""
-    : `<div class="notice">Вы не вошли в аккаунт: решения сохраняются только в этом браузере. <a href="login.html"><b>Создайте аккаунт</b></a>, чтобы другие видели ваш код.</div>`;
+    : `<div class="notice">Гостевой режим · Решения сохраняются в этом браузере. <a href="login.html">Войти или создать аккаунт <span aria-hidden="true">↗</span></a></div>`;
 
 function home() {
-  const cards = DATA.sections
-    .map((s) => {
-      const d = s.tasks.filter((t) => subs[t.id]).length;
-      return `<a class="box tc" href="topic.html?t=${s.id}"><b>${s.title}</b><small>${s.tasks.length} задач</small>
-      <div class="row" style="margin:0"><div class="pw" style="flex:1"><div class="pf" style="width:${(100 * d) / s.tasks.length}%"></div></div><span class="msg">${d}/${s.tasks.length}</span></div></a>`;
-    })
-    .join("");
-  setApp(
-    `<h1>🐍 Python Задачи</h1><p class="sub">shohin’s Academy · Шохин Алимов — решай задачи, вставляй код и делись им с другими.</p>${notice()}<div class="grid">${cards}</div>`,
-  );
+  const next = TASKS.find((t) => !subs[t.id]) || TASKS[0];
+  const started = doneCount() > 0;
+  const cards = DATA.sections.map((s) => {
+    const solved = s.tasks.filter((t) => subs[t.id]).length;
+    const [icon, ...title] = s.title.split(" ");
+    return `<a class="box tc" href="topic.html?t=${s.id}">
+      <div class="module-top"><span class="module-icon" aria-hidden="true">${icon}</span><span class="module-arrow" aria-hidden="true">↗</span></div>
+      <h3>${title.join(" ")}</h3><small>Решено ${solved} из ${s.tasks.length}</small>
+      <div class="pw" aria-hidden="true"><div class="pf" style="width:${(100 * solved) / s.tasks.length}%"></div></div>
+    </a>`;
+  }).join("");
+  setApp(`<section class="hero">
+    <div class="hero-copy">
+      <p class="eyebrow"><span></span> Практика программирования</p>
+      <h1>Учись Python.<br><em>Пиши код.</em></h1>
+      <p class="hero-summary">${TASKS.length} задач с автопроверкой. От первой переменной до собственного класса.</p>
+      <a class="btn p" href="topic.html?t=${next.sid}#c${next.id}">${started ? "Продолжить практику" : "Начать решать"} <span aria-hidden="true">↗</span></a>
+    </div>
+    <div class="hero-code" aria-hidden="true">
+      <div class="terminal">
+        <div class="terminal-bar"><span></span><span></span><span></span><small>solution.py</small></div>
+        <div class="terminal-body">
+          <div><i>01</i><b>def</b> square(n):</div>
+          <div><i>02</i>&nbsp;&nbsp;&nbsp;&nbsp;<b>return</b> n ** 2</div>
+          <div><i>03</i></div>
+          <div><i>04</i>print(square(<strong>5</strong>))</div>
+          <div class="terminal-output"><i>&gt;</i>25 <span>✓</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+  <section id="topics" aria-labelledby="topics-title">
+    <div class="section-head"><h2 id="topics-title">Темы задач</h2><span>${DATA.sections.length} модулей</span></div>
+    ${notice()}<div class="grid">${cards}</div>
+  </section>`);
 }
 
 function topic() {
@@ -130,55 +155,98 @@ function topic() {
         `<a href="topic.html?t=${x.id}" class="${x.id === s.id ? "on" : ""}">${x.title}</a>`,
     )
     .join("");
+  const drafts = me ? lsGet() : {};
   const cards = s.tasks
     .map((t) => {
       const sb = subs[t.id];
-      return `<div class="card ${sb ? "done" : ""}" id="c${t.id}">
-      <div class="head"><div class="num">${t.id}</div><div class="ct">${t.title}</div><div>${t.stars}</div></div>
-      <div class="tag ${t.lvl}">${t.lvlText}</div><div class="desc">${t.desc}</div>
-      <textarea id="code${t.id}" spellcheck="false" placeholder="# Вставь сюда свой код…">${esc(sb?.code || "")}</textarea>
-      <div class="row"><button data-hint="${t.id}">💡 Подсказка</button>
-        <button class="${sb ? "ok" : "p"}" data-send="${t.id}">${sb ? "✓ Обновить решение" : "Отправить решение"}</button>
-        <span class="msg" id="m${t.id}">${sb ? "Сохранено " + fmt(sb.ts) : ""}</span></div>
-      <div class="hint" id="h${t.id}">${t.hint}</div></div>`;
+      return `<article class="card task-card ${sb ? "done" : ""}" id="c${t.id}">
+        <div class="task-copy">
+          <div class="head"><span class="num">#${t.id}</span><span class="tag ${t.lvl}">${t.lvlText}</span></div>
+          <h2 class="ct">${t.title}</h2><div class="desc">${t.desc}</div>
+          <button class="hint-button" type="button" data-hint="${t.id}" aria-controls="h${t.id}" aria-expanded="false">Подсказка <span aria-hidden="true">+</span></button>
+          <div class="hint" id="h${t.id}">${t.hint}</div>
+        </div>
+        <div class="task-editor">
+          <label class="editor-title" for="code${t.id}">Твой код <span>Python</span></label>
+          <textarea id="code${t.id}" spellcheck="false" autocapitalize="off" maxlength="20000" placeholder="# Вставь сюда свой код…">${esc(sb?.code || drafts[t.id]?.code || "")}</textarea>
+          <div class="check-row"><button class="p" type="button" data-send="${t.id}">Проверить решение <span aria-hidden="true">↗</span></button></div>
+          <div class="check-result" role="status" id="m${t.id}" ${sb?.checked ? 'data-status="passed"' : ""}>${sb ? (sb.checked ? "✓ Принято " : "Ранее сохранено ") + fmt(sb.ts) : ""}</div>
+        </div>
+      </article>`;
     })
     .join("");
   setApp(
-    `<div class="tabs">${tabs}</div><h1>${s.title}</h1><p class="sub">${s.sub}</p>${notice()}${cards}`,
+    `<div class="tabs" aria-label="Темы">${tabs}</div><div class="page-head"><h1>${s.title}</h1><p class="sub">${s.sub}</p></div>${notice()}${cards}`,
   );
-  if (location.hash.startsWith("#c")) $(location.hash)?.scrollIntoView();
+  if (/^#c\d+$/.test(location.hash)) $(location.hash)?.scrollIntoView();
+}
+
+function checkMessage(result) {
+  if (result.status === "passed") return `✓ Принято. Тесты: ${result.passed} из ${result.total}.`;
+  if (result.status === "syntax") {
+    return result.line
+      ? `Синтаксическая ошибка в строке ${result.line}.`
+      : "Синтаксическая ошибка.";
+  }
+  const labels = {
+    wrong: "Результат отличается от ожидаемого.",
+    input: "Программа запрашивает больше данных, чем предусмотрено тестом.",
+    runtime: "Ошибка при выполнении программы.",
+    timeout: "Превышено время выполнения. Проверьте условие выхода из цикла.",
+    output: "Программа выводит слишком много текста.",
+  };
+  const inputs = result.inputs?.length
+    ? ` Ввод: ${result.inputs.join(" · ")}.`
+    : "";
+  return `Тест ${result.case} из ${result.total}. ${labels[result.status]}${inputs}`;
 }
 
 document.addEventListener("click", async (e) => {
-  const h = e.target.closest("[data-hint]");
-  if (h) return $("#h" + h.dataset.hint).classList.toggle("show");
-  const b = e.target.closest("[data-send]");
-  if (!b) return;
-  const id = +b.dataset.send,
-    code = $("#code" + id).value,
-    m = $("#m" + id);
-  if (!code.trim()) {
-    m.textContent = "Вставьте код в поле выше";
+  const hint = e.target.closest("[data-hint]");
+  if (hint) {
+    const visible = $("#h" + hint.dataset.hint).classList.toggle("show");
+    hint.setAttribute("aria-expanded", String(visible));
     return;
   }
-  b.disabled = true;
-  try {
-    let ts = Date.now();
-    if (me) ts = (await api("PUT", "/solutions/" + id, { code })).solution.ts;
-    subs[id] = { code, ts };
-    if (!me) lsSet(subs);
-    m.textContent = "Сохранено " + fmt(ts);
-    b.className = "ok";
-    b.textContent = "✓ Обновить решение";
-    $("#c" + id).classList.add("done");
-    chrome();
-  } catch (err) {
-    m.textContent = err.message;
+  const button = e.target.closest("[data-send]");
+  if (!button || button.disabled) return;
+  const id = Number(button.dataset.send);
+  const editor = $("#code" + id);
+  const message = $("#m" + id);
+  const code = editor.value;
+  if (!code.trim()) {
+    message.dataset.status = "wrong";
+    message.textContent = "Вставьте код в поле выше";
+    editor.focus();
+    return;
   }
-  b.disabled = false;
+  button.disabled = true;
+  editor.readOnly = true;
+  message.dataset.status = "pending";
+  message.textContent = "Проверяем решение…";
+  try {
+    const response = me
+      ? await api("PUT", "/solutions/" + id, { code })
+      : await api("POST", "/check/" + id, { code });
+    const { result } = response;
+    message.dataset.status = result.status;
+    message.textContent = checkMessage(result);
+    if (result.status === "passed") {
+      subs[id] = response.solution || { code, ts: Date.now(), checked: true };
+      if (!me) lsSet(subs);
+      $("#c" + id).classList.add("done");
+      chrome();
+    }
+  } catch (error) {
+    message.dataset.status = "runtime";
+    message.textContent = error.message;
+  } finally {
+    button.disabled = false;
+    editor.readOnly = false;
+  }
 });
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Tab" && e.target.tagName === "TEXTAREA") {
+  if (e.key === "Tab" && !e.shiftKey && e.target.matches("textarea:enabled:not([readonly])")) {
     e.preventDefault();
     const t = e.target,
       s = t.selectionStart;
@@ -346,12 +414,20 @@ function login() {
             emoji: em,
             bio: $("#lb").value,
           });
-        const old = lsGet();
-        for (const id of Object.keys(old))
-          await api("PUT", "/solutions/" + id, { code: old[id].code }).catch(
-            () => {},
-          );
-        lsSet({});
+        const local = lsGet();
+        if (Object.keys(local).length) {
+          try {
+            const { solutions } = await api("GET", "/me");
+            for (const [id, draft] of Object.entries(local)) {
+              if (solutions[id]) continue;
+              try {
+                const { result } = await api("PUT", "/solutions/" + id, { code: draft.code });
+                if (result.status === "passed") delete local[id];
+              } catch {}
+            }
+            lsSet(local);
+          } catch {}
+        }
         location.href = "profile.html";
       } catch (e) {
         $("#er").textContent = e.message;
@@ -365,4 +441,4 @@ function login() {
   };
   draw();
 }
-boot();
+boot().catch(() => setApp(`<p class="empty">Не удалось загрузить задачи. Обновите страницу и попробуйте снова.</p>`));
