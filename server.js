@@ -5,15 +5,17 @@ const cookieParser = require("cookie-parser");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const { MongoClient, ObjectId } = require("mongodb");
+const { grade } = require("./runner");
 
 const { MONGODB_URI, JWT_SECRET, PORT = 3000, NODE_ENV } = process.env;
 if (!MONGODB_URI || !JWT_SECRET) {
   console.error("Задайте MONGODB_URI и JWT_SECRET в файле .env");
   process.exit(1);
 }
-const TASK_COUNT = require("./public/tasks.json").sections.reduce(
-  (n, s) => n + s.tasks.length,
-  0,
+const TASK_IDS = new Set(
+  require("./public/tasks.json").sections.flatMap((section) =>
+    section.tasks.map((task) => task.id),
+  ),
 );
 
 const app = express();
@@ -25,12 +27,19 @@ app.use(express.static(path.join(__dirname, "public")));
 let users, sols;
 const wrap = (fn) => (req, res) =>
   fn(req, res).catch((e) => {
+    if (e.httpStatus) return res.status(e.httpStatus).json({ error: e.message });
     console.error(e);
     res.status(500).json({ error: "Ошибка сервера" });
   });
 const bad = (res, msg, code = 400) => res.status(code).json({ error: msg });
 
 const hits = new Map();
+setInterval(() => {
+  const oldest = Date.now() - 36e5;
+  for (const [key, attempts] of hits) {
+    if (attempts.at(-1) < oldest) hits.delete(key);
+  }
+}, 36e5).unref();
 const limit = (max, ms) => (req, res, next) => {
   const k = req.ip + req.path,
     now = Date.now();
@@ -51,7 +60,7 @@ const pub = (u) => ({
   created: u.created,
 });
 const toMap = (list) =>
-  Object.fromEntries(list.map((s) => [s.task, { code: s.code, ts: s.ts }]));
+  Object.fromEntries(list.map((s) => [s.task, { code: s.code, ts: s.ts, checked: s.checked === true }]));
 const setCookie = (res, id) =>
   res.cookie(
     "tok",
@@ -75,6 +84,30 @@ async function auth(req, res, next) {
 }
 const need = (req, res, next) =>
   req.user ? next() : bad(res, "Нужно войти в аккаунт", 401);
+function validateSubmission(req, res, next) {
+  const id = req.params.task;
+  const task = Number(id);
+  if (!/^\d+$/.test(id) || !TASK_IDS.has(task))
+    return bad(res, "Нет такой задачи", 404);
+  const code = req.body?.code;
+  if (typeof code !== "string" || !code.trim()) return bad(res, "Код пустой");
+  if (code.length > 20000)
+    return bad(res, "Код слишком длинный (макс. 20 000 символов)");
+  req.submission = { task, code };
+  next();
+}
+
+const checkLimit = limit(40, 60e3);
+app.post(
+  "/api/check/:task",
+  checkLimit,
+  validateSubmission,
+  wrap(async (req, res) => {
+    const { task, code } = req.submission;
+    res.json({ result: await grade(task, code) });
+  }),
+);
+
 app.use("/api", auth);
 
 app.post(
@@ -142,10 +175,8 @@ app.get(
   "/api/me",
   wrap(async (req, res) => {
     if (!req.user) return res.json({ user: null });
-    res.json({
-      user: pub(req.user),
-      solutions: toMap(await sols.find({ userId: req.user._id }).toArray()),
-    });
+    const solutions = await sols.find({ userId: req.user._id }).toArray();
+    res.json({ user: pub({ ...req.user, solved: solutions.length }), solutions: toMap(solutions) });
   }),
 );
 
@@ -162,35 +193,31 @@ app.patch(
     if (b.emoji !== undefined) set.emoji = String(b.emoji).slice(0, 8);
     if (b.bio !== undefined) set.bio = String(b.bio).trim().slice(0, 120);
     await users.updateOne({ _id: req.user._id }, { $set: set });
-    res.json({ user: pub({ ...req.user, ...set }) });
+    const solved = await sols.countDocuments({ userId: req.user._id });
+    res.json({ user: pub({ ...req.user, ...set, solved }) });
   }),
 );
-
-const recount = async (u) => {
-  const n = await sols.countDocuments({ userId: u._id });
-  await users.updateOne({ _id: u._id }, { $set: { solved: n } });
-  return n;
-};
 
 app.put(
   "/api/solutions/:task",
   need,
-  limit(120, 36e5),
+  checkLimit,
+  validateSubmission,
   wrap(async (req, res) => {
-    const task = parseInt(req.params.task, 10),
-      code = String(req.body?.code ?? "");
-    if (!(task >= 1 && task <= TASK_COUNT))
-      return bad(res, "Нет такой задачи", 404);
-    if (!code.trim()) return bad(res, "Код пустой");
-    if (code.length > 20000)
-      return bad(res, "Код слишком длинный (макс. 20 000 символов)");
-    const ts = Date.now();
-    await sols.updateOne(
-      { userId: req.user._id, task },
-      { $set: { code, ts } },
-      { upsert: true },
-    );
-    res.json({ solution: { code, ts }, solved: await recount(req.user) });
+    const { task, code } = req.submission;
+    const result = await grade(task, code);
+    if (result.status !== "passed") return res.json({ result });
+
+    const solution = { code, ts: Date.now(), checked: true };
+    const key = { userId: req.user._id, task };
+    try {
+      await sols.updateOne(key, { $set: solution }, { upsert: true });
+    } catch (error) {
+      if (error.code !== 11000) throw error;
+      await sols.updateOne(key, { $set: solution });
+    }
+    const solved = await sols.countDocuments({ userId: req.user._id });
+    res.json({ result, solution, solved });
   }),
 );
 
@@ -199,7 +226,6 @@ app.delete(
   need,
   wrap(async (req, res) => {
     await sols.deleteMany({ userId: req.user._id });
-    await recount(req.user);
     res.json({ ok: true });
   }),
 );
@@ -210,9 +236,19 @@ app.get(
     res.json({
       users: (
         await users
-          .find({})
-          .sort({ solved: -1, created: 1 })
-          .limit(200)
+          .aggregate([
+            { $project: { username: 1, name: 1, emoji: 1, bio: 1, created: 1 } },
+            { $lookup: {
+              from: "solutions",
+              localField: "_id",
+              foreignField: "userId",
+              pipeline: [{ $count: "count" }],
+              as: "progress",
+            } },
+            { $set: { solved: { $ifNull: [{ $arrayElemAt: ["$progress.count", 0] }, 0] } } },
+            { $sort: { solved: -1, created: 1, _id: 1 } },
+            { $limit: 200 },
+          ])
           .toArray()
       ).map(pub),
     });
@@ -226,10 +262,8 @@ app.get(
       username: String(req.params.username).toLowerCase(),
     });
     if (!u) return bad(res, "Пользователь не найден", 404);
-    res.json({
-      user: pub(u),
-      solutions: toMap(await sols.find({ userId: u._id }).toArray()),
-    });
+    const solutions = await sols.find({ userId: u._id }).toArray();
+    res.json({ user: pub({ ...u, solved: solutions.length }), solutions: toMap(solutions) });
   }),
 );
 
@@ -239,7 +273,6 @@ app.get(
   users = db.collection("users");
   sols = db.collection("solutions");
   await users.createIndex({ username: 1 }, { unique: true });
-  await users.createIndex({ solved: -1 });
   await sols.createIndex({ userId: 1, task: 1 }, { unique: true });
   app.listen(PORT, () => console.log("http://localhost:" + PORT));
 })().catch((e) => {
