@@ -47,6 +47,7 @@ const lsSet = (v) => {
 let DATA,
   TASKS = [],
   me = null,
+  accountApi = false,
   subs = {};
 
 async function api(method, url, body) {
@@ -57,7 +58,7 @@ async function api(method, url, body) {
     body: body ? JSON.stringify(body) : undefined,
   });
   const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(j.error || "Ошибка");
+  if (!r.ok) throw Object.assign(new Error(j.error || "Ошибка"), { status: r.status });
   return j;
 }
 const setApp = (h) => {
@@ -72,6 +73,7 @@ async function boot() {
   );
   try {
     const r = await api("GET", "/me");
+    accountApi = true;
     me = r.user;
     subs = r.solutions || {};
   } catch {}
@@ -201,6 +203,23 @@ function checkMessage(result) {
   return `Тест ${result.case} из ${result.total}. ${labels[result.status]}${inputs}`;
 }
 
+async function checkSolution(id, code, message) {
+  if (accountApi) {
+    try {
+      return me
+        ? await api("PUT", "/solutions/" + id, { code })
+        : await api("POST", "/check/" + id, { code });
+    } catch (error) {
+      if (![404, 405, 501, 503].includes(error.status) && !(error instanceof TypeError)) {
+        throw error;
+      }
+    }
+  }
+  message.textContent = "Проверяем в браузере. При первом запуске загружается Python…";
+  const { gradeInBrowser } = await import("./browser-grader.js");
+  return { result: await gradeInBrowser(id, code), browser: true };
+}
+
 document.addEventListener("click", async (e) => {
   const hint = e.target.closest("[data-hint]");
   if (hint) {
@@ -225,13 +244,15 @@ document.addEventListener("click", async (e) => {
   message.dataset.status = "pending";
   message.textContent = "Проверяем решение…";
   try {
-    const response = me
-      ? await api("PUT", "/solutions/" + id, { code })
-      : await api("POST", "/check/" + id, { code });
+    const response = await checkSolution(id, code, message);
     const { result } = response;
     message.dataset.status = result.status;
     message.textContent = checkMessage(result);
     if (result.status === "passed") {
+      if (me && response.browser) {
+        message.textContent = "✓ Тесты пройдены в браузере. Для записи прогресса в аккаунт нужна серверная проверка.";
+        return;
+      }
       subs[id] = response.solution || { code, ts: Date.now(), checked: true };
       if (!me) lsSet(subs);
       $("#c" + id).classList.add("done");

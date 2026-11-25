@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'unsafe-inline' 'wasm-unsafe-eval' https://cdn.jsdelivr.net; connect-src https://cdn.jsdelivr.net; worker-src blob:">
+    <title>Среда проверки Python</title>
+  </head>
+  <body>
+    <script>
+      window.addEventListener("message", function receive(event) {
+        if (event.source !== parent || event.ports.length !== 1) return;
+        window.removeEventListener("message", receive);
+        const port = event.ports[0];
+        const { workerCode, core, code, task } = event.data;
+        const url = URL.createObjectURL(new Blob([workerCode], { type: "text/javascript" }));
+        try {
+          const worker = new Worker(url);
+          worker.onmessage = ({ data }) => {
+            URL.revokeObjectURL(url);
+            port.postMessage(data);
+            if (data?.type !== "ready") worker.terminate();
+          };
+          worker.onerror = () => {
+            URL.revokeObjectURL(url);
+            port.postMessage({ type: "error" });
+            worker.terminate();
+          };
+          worker.postMessage({ core, code, task });
+        } catch {
+          URL.revokeObjectURL(url);
+          port.postMessage({ type: "error" });
+        }
+      });
+    </script>
+  </body>
+</html>

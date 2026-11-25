@@ -4,9 +4,11 @@ const { readFileSync } = require("node:fs");
 const path = require("node:path");
 
 const bootstrap = "import json,sys; exec(json.loads(sys.stdin.readline()))";
-const grader = JSON.stringify(readFileSync(path.join(__dirname, "grader.py"), "utf8"));
+const grader = JSON.stringify(readFileSync(path.join(__dirname, "public", "grade-core.py"), "utf8"));
 const image = process.env.GRADER_IMAGE || "python:3.13-slim";
 const statuses = new Set(["passed", "syntax", "wrong", "input", "runtime", "timeout", "output"]);
+const configurationMessage =
+  "Серверная проверка недоступна. Для сохранения в аккаунте серверу нужен Docker.";
 let active = 0;
 
 function unavailable(message, httpStatus = 503) {
@@ -28,8 +30,9 @@ function grade(task, code) {
       "--memory=96m", "--memory-swap=96m", "--cpus=1", "--pids-limit=24",
       "--ulimit", "nofile=64:64", "--ulimit", "core=0:0",
       "--log-driver=none", "--init", image, "python", "-I", "-B", "-c", bootstrap,
-    ], { stdio: ["pipe", "pipe", "ignore"], windowsHide: true });
+    ], { stdio: ["pipe", "pipe", "pipe"], windowsHide: true });
     let output = "";
+    let diagnostics = "";
     let stopping = false;
 
     const stop = () => {
@@ -43,6 +46,10 @@ function grade(task, code) {
     const timer = setTimeout(stop, 20000);
 
     child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", (chunk) => {
+      if (diagnostics.length < 1024) diagnostics = (diagnostics + chunk).slice(0, 1024);
+    });
     child.stdout.on("data", (chunk) => {
       if (stopping) return;
       output += chunk;
@@ -52,18 +59,22 @@ function grade(task, code) {
       }
     });
     child.stdin.on("error", () => {}); // Failed startup is handled by close.
-    child.on("error", () => {
-      if (!stopping) reject(unavailable("Сервис проверки недоступен. Попробуйте позже."));
-    });
+    let spawnError;
+    child.on("error", (error) => { spawnError = error.code; });
     child.on("close", (exitCode) => {
       clearTimeout(timer);
       if (stopping) return;
+      if (exitCode !== 0) {
+        console.error("Python grader could not start:", spawnError || diagnostics.trim() || exitCode);
+        reject(unavailable(configurationMessage));
+        return;
+      }
       try {
         const result = JSON.parse(output);
-        if (exitCode !== 0 || !statuses.has(result.status)) throw new Error();
+        if (!statuses.has(result.status)) throw new Error();
         resolve(result);
       } catch {
-        reject(unavailable("Сервис проверки недоступен. Попробуйте позже."));
+        reject(unavailable("Проверка прервана. Попробуйте ещё раз."));
       }
     });
     child.stdin.end(grader + "\n" + JSON.stringify({ task, code }));
