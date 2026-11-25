@@ -1,21 +1,22 @@
 :root {
-  color-scheme: dark;
-  --bg: #141414;
-  --sf: #1c1c1c;
-  --tx: #f5f2ec;
-  --mu: #b7b3ad;
-  --bd: #383633;
-  --ac: #ff885e;
-  --ac2: #302822;
-  --ok: #a6dbac;
-  --eb: #24382a;
-  --et: #bceac0;
-  --mb: #3e3322;
-  --mt: #f3d094;
-  --hb: #492b29;
-  --ht: #ffb0a7;
-  --code: #111110;
-  --codet: #f3eee6;
+  color-scheme: light;
+  --bg: #faf7f2;
+  --sf: #ffffff;
+  --tx: #1f1b16;
+  --mu: #6b645b;
+  --bd: #e6dfd3;
+  --ac: #d9480f;
+  --on-ac: #ffffff;
+  --ac2: #fdece3;
+  --ok: #2b8a3e;
+  --eb: #e3f4e6;
+  --et: #1e6b2f;
+  --mb: #fff1d6;
+  --mt: #7a5200;
+  --hb: #fde4e1;
+  --ht: #b42318;
+  --code: #fbf8f3;
+  --codet: #1f1b16;
   --radius: 20px;
   --gutter: clamp(18px, 4vw, 48px);
   padding-top: env(safe-area-inset-top, 0px);
@@ -167,7 +168,7 @@ h1 {
 .tabs a.on {
   background: var(--ac);
   border-color: var(--ac);
-  color: #17120e;
+  color: var(--on-ac);
 }
 .head {
   display: flex;
@@ -295,12 +296,12 @@ button.p,
 .btn.p {
   background: var(--ac);
   border-color: var(--ac);
-  color: #17120e;
+  color: var(--on-ac);
 }
 button.ok {
   background: var(--ok);
   border-color: var(--ok);
-  color: #17120e;
+  color: var(--on-ac);
 }
 button.d {
   color: var(--ht);
@@ -428,7 +429,7 @@ pre {
 .seg button.on {
   background: var(--ac);
   border-color: var(--ac);
-  color: #17120e;
+  color: var(--on-ac);
 }
 .err {
   color: var(--ht);
@@ -496,7 +497,7 @@ details.mod[open] > .msum::before {
   height: 34px;
   border-radius: 9px;
   background: var(--ac);
-  color: #17120e;
+  color: var(--on-ac);
   font: 800 17px/1 ui-monospace, monospace;
 }
 .hero {
@@ -506,9 +507,9 @@ details.mod[open] > .msum::before {
   gap: clamp(18px, 4vw, 48px);
   min-height: 420px;
   padding: clamp(24px, 5vw, 70px);
-  border: 1px solid #44372d;
+  border: 1px solid #f0d9c8;
   border-radius: clamp(20px, 3vw, 36px);
-  background: radial-gradient(ellipse at 85% 30%, #3a2a1f, transparent 60%), #1b1917;
+  background: radial-gradient(ellipse at 85% 30%, #ffe3d1, transparent 60%), #fffaf4;
   overflow: hidden;
 }
 .hero h1 {
@@ -525,7 +526,7 @@ details.mod[open] > .msum::before {
   align-items: center;
   gap: 8px;
   margin: 0 0 20px;
-  color: #d8c3b4;
+  color: #7a5a45;
   font: 600 12px/1.4 ui-monospace, monospace;
 }
 .eyebrow span {
@@ -535,7 +536,7 @@ details.mod[open] > .msum::before {
   background: var(--ac);
 }
 .hero-summary {
-  color: #d1c6bb;
+  color: #5c544b;
   max-width: 360px;
   margin: 20px 0 24px;
 }
@@ -551,23 +552,23 @@ details.mod[open] > .msum::before {
 }
 .btn.p:hover,
 button.p:enabled:hover {
-  background: #ffac88;
-  border-color: #ffac88;
+  background: #bf3f0a;
+  border-color: #bf3f0a;
 }
 .hero-code {
   padding: clamp(12px, 3vw, 35px);
-  border: 1px solid #6b4b36;
+  border: 1px solid #f0c9b0;
   border-radius: 24px;
   background:
-    radial-gradient(circle, #ff9b6d45 1px, transparent 1.4px) 0 0 / 15px 15px,
-    linear-gradient(145deg, #4a3124, #251d17 78%);
+    radial-gradient(circle, #d9480f33 1px, transparent 1.4px) 0 0 / 15px 15px,
+    linear-gradient(145deg, #ffe9db, #fff3ea 78%);
 }
 .terminal {
   border: 1px solid #54433a;
   border-radius: 14px;
   background: #181614;
   overflow: hidden;
-  box-shadow: 0 14px 35px #0007;
+  box-shadow: 0 14px 35px #2a1a1030;
 }
 .terminal-bar {
   display: flex;
@@ -607,12 +608,12 @@ button.p:enabled:hover {
 }
 .terminal-body strong,
 .terminal-output {
-  color: var(--ok);
+  color: #a6dbac;
 }
 .terminal-output {
   margin-top: 12px;
   padding-top: 8px;
-  border-top: 1px solid var(--bd);
+  border-top: 1px solid #3b3028;
 }
 .terminal-output span {
   float: right;
@@ -644,7 +645,7 @@ button.p:enabled:hover {
 .module-arrow {
   display: grid;
   place-items: center;
-  background: #302721;
+  background: #fdece3;
   border-radius: 10px;
   width: 40px;
   height: 40px;
@@ -655,7 +656,7 @@ button.p:enabled:hover {
   border: 1px solid var(--bd);
 }
 .tc:hover .module-arrow {
-  color: #17120e;
+  color: var(--on-ac);
   background: var(--ac);
   border-color: var(--ac);
 }
